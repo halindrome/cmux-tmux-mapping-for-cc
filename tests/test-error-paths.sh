@@ -139,6 +139,46 @@ _run_hook_all "agent-tmux-cleanup.sh" "broken json" "CMUX_FORCE_ENV=cmux" >/dev/
 assert_ok "$rc" "test_cleanup_hook_malformed_json (exits 0)"
 
 # =============================================================================
+# Direction validation tests
+# =============================================================================
+
+# -- test_invalid_direction_rejected -------------------------------------------
+_DETECTED_ENV=""
+_AGENT_PANELS=()
+_PANEL_COUNTER=0
+CMUX_FORCE_ENV=cmux
+rc=0
+err=$(mux_create_panel "dir-agent" "z" 2>&1 >/dev/null) || rc=$?
+assert_fail "$rc" "test_invalid_direction_rejected (returns non-zero)"
+assert_contains "$err" "invalid direction" "test_invalid_direction_rejected (error message)"
+
+# -- test_valid_directions_accepted_v ------------------------------------------
+_DETECTED_ENV=""
+_AGENT_PANELS=()
+_PANEL_COUNTER=0
+CMUX_FORCE_ENV=cmux
+rc=0
+mux_create_panel "dir-v-agent" "v" >/dev/null 2>&1 || rc=$?
+assert_ok "$rc" "test_valid_directions_accepted (v)"
+
+# -- test_valid_directions_accepted_h ------------------------------------------
+_DETECTED_ENV=""
+_AGENT_PANELS=()
+_PANEL_COUNTER=0
+CMUX_FORCE_ENV=cmux
+rc=0
+mux_create_panel "dir-h-agent" "h" >/dev/null 2>&1 || rc=$?
+assert_ok "$rc" "test_valid_directions_accepted (h)"
+
+# -- test_missing_mux_warning --------------------------------------------------
+# SessionStart hook emits a "no multiplexer" warning on stderr when env=none
+rc=0
+stderr_out=$(_run_hook_all "tmux-session-start.sh" \
+  '{"hook_event_name":"SessionStart"}' \
+  "CMUX_FORCE_ENV=none") || rc=$?
+assert_contains "$stderr_out" "no tmux/cmux detected" "test_missing_mux_warning (warns about missing mux)"
+
+# =============================================================================
 # Isolation error paths
 # =============================================================================
 
