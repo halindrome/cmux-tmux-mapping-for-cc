@@ -143,7 +143,7 @@ create_agent_panel() {
     env=$(_isolation_detect_env)
 
     # Generate a unique identifier
-    (( _PANEL_COUNTER++ ))
+    _PANEL_COUNTER=$(( _PANEL_COUNTER + 1 ))
     local identifier="panel-${_PANEL_COUNTER}"
 
     local handle="${env}:${identifier}"
