@@ -65,6 +65,7 @@ detect_environment() {
   else
     _DETECTED_ENV="none"
     log_debug "Detected environment: none"
+    log_warn "no multiplexer detected: install tmux or cmux for panel support"
   fi
 
   printf '%s\n' "$_DETECTED_ENV"

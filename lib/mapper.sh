@@ -103,6 +103,11 @@ mux_create_panel() {
     return 1
   fi
 
+  if [[ "$direction" != "v" && "$direction" != "h" ]]; then
+    log_error "mux_create_panel: invalid direction '$direction': must be 'v' or 'h'"
+    return "$E_INVALID_ARGS"
+  fi
+
   local env
   env=$(detect_environment)
 

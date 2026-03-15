@@ -15,6 +15,10 @@ INPUT=$(cat)
 # Parse agent name from tool_input (following agent-cmm-gate.sh pattern)
 AGENT_NAME=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('name','unknown'))" 2>/dev/null || echo "unknown")
 
+if [[ "$AGENT_NAME" == "unknown" ]]; then
+  echo "cmux-mapper: could not parse agent name from hook input, using 'unknown'" >&2
+fi
+
 # Source mapper API via plugin root
 source "${CLAUDE_PLUGIN_ROOT}/lib/mapper.sh"
 

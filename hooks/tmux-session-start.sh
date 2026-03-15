@@ -29,6 +29,11 @@ if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
   echo "export CLAUDE_MUXER=$env" >> "$CLAUDE_ENV_FILE"
 fi
 
+# Warn on stderr when no multiplexer is available
+if [[ "$env" == "none" ]]; then
+  echo "cmux-mapper: no tmux/cmux detected, panel operations will be unavailable" >&2
+fi
+
 # Detect agent vs human context
 if [[ -n "${CLAUDE_AGENT_ID:-}" ]]; then
   # Agent mode -- concise, machine-oriented context
