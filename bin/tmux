@@ -311,12 +311,26 @@ case "$subcmd" in
     ;;
 
   list-panes)
-    # Try cmux list-surfaces, transform to tmux-like format
-    if command -v cmux &>/dev/null; then
-      cmux list-surfaces 2>/dev/null || true
-    else
-      echo "0: [80x24] [active]"
+    # CC calls: list-panes -t {window} -F #{pane_id}
+    # Response must be lines of %N-style IDs (e.g. %0, %1).
+    # We enumerate the registry to build the pane list; fall back to %0.
+    _lp_panes=()
+    if [[ -n "${CMUX_REGISTRY_DIR:-}" && -d "$CMUX_REGISTRY_DIR" ]]; then
+      while IFS= read -r -d '' _lp_entry; do
+        _lp_id="$(basename "$_lp_entry")"
+        # Only emit entries that look like pane IDs (%N)
+        if [[ "$_lp_id" == %* ]]; then
+          _lp_panes+=("$_lp_id")
+        fi
+      done < <(find "$CMUX_REGISTRY_DIR" -maxdepth 1 -type f -print0 2>/dev/null)
     fi
+    if [[ ${#_lp_panes[@]} -eq 0 ]]; then
+      _lp_panes=("${TMUX_PANE:-%0}")
+    fi
+    for _lp_pane in "${_lp_panes[@]}"; do
+      echo "$_lp_pane"
+    done
+    _shim_log_result "list-panes:${#_lp_panes[@]}" 0
     exit 0
     ;;
 
