@@ -116,8 +116,21 @@ mux_create_panel() {
     return 1
   fi
 
-  # Create the panel in the isolation registry
-  create_agent_panel "$agent_id" "$direction"
+  # Register in isolation registry
+  local handle
+  handle=$(create_agent_panel "$agent_id" "$direction") || return $?
+
+  # Actually create the panel in the multiplexer
+  local split_cmd
+  split_cmd=$(map_split_window "-${direction}") 2>/dev/null || true
+  if [[ -n "$split_cmd" ]]; then
+    log_debug "mux_create_panel: executing: $split_cmd"
+    eval "$split_cmd" 2>/dev/null || {
+      log_warn "mux_create_panel: split command failed for agent '$agent_id' (continuing)"
+    }
+  fi
+
+  echo "$handle"
 }
 
 # -----------------------------------------------------------------------------
@@ -140,7 +153,34 @@ mux_destroy_panel() {
     return 1
   fi
 
-  destroy_agent_panel "$agent_id"
+  local handle
+  handle=$(get_agent_panel "$agent_id") || {
+    log_debug "mux_destroy_panel: no panel found for agent '$agent_id'"
+    return 1
+  }
+
+  # Extract identifier from handle and execute kill command
+  local identifier="${handle#*:}"
+  local env
+  env=$(detect_environment)
+
+  case "$env" in
+    cmux)
+      local kill_cmd
+      kill_cmd=$(map_kill_pane -t "$identifier") 2>/dev/null || true
+      if [[ -n "$kill_cmd" ]]; then
+        log_debug "mux_destroy_panel: executing: $kill_cmd"
+        eval "$kill_cmd" 2>/dev/null || true
+      fi
+      ;;
+    tmux)
+      eval "tmux kill-pane -t $identifier" 2>/dev/null || true
+      ;;
+  esac
+
+  # Remove from registry
+  destroy_agent_panel "$agent_id" >/dev/null 2>&1 || true
+  echo "$handle"
 }
 
 # -----------------------------------------------------------------------------
@@ -174,15 +214,27 @@ mux_send() {
   local env
   env=$(detect_environment)
 
+  local identifier="${handle#*:}"
+
   case "$env" in
     cmux)
-      # Extract identifier from handle (everything after first colon)
-      local surface="${handle#*:}"
-      echo "cmux send -s ${surface} ${text}"
+      local send_cmd
+      send_cmd=$(map_send_keys -t "$identifier" "$text") 2>/dev/null || true
+      if [[ -n "$send_cmd" ]]; then
+        log_debug "mux_send: executing: $send_cmd"
+        eval "$send_cmd" 2>/dev/null || {
+          log_warn "mux_send: send command failed for agent '$agent_id'"
+        }
+      fi
+      echo "$send_cmd"
       ;;
     tmux)
-      local pane="${handle#*:}"
-      echo "tmux send-keys -t ${pane} ${text}"
+      local cmd="tmux send-keys -t ${identifier} ${text}"
+      log_debug "mux_send: executing: $cmd"
+      eval "$cmd" 2>/dev/null || {
+        log_warn "mux_send: send command failed for agent '$agent_id'"
+      }
+      echo "$cmd"
       ;;
     none)
       log_error "mux_send: no multiplexer detected"
