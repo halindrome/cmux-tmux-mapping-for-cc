@@ -1,5 +1,8 @@
 # cmux-tmux-mapping
 
+> **⚠ NOT READY FOR USE**
+> This plugin is under active development and is not stable. Do not install or depend on it — APIs, hooks, and behavior will change without notice.
+
 A Claude Code plugin that automatically enables tmux support for agents and maps tmux operations into cmux commands for panel management.
 
 ## Overview
