@@ -17,8 +17,11 @@ set -euo pipefail
 # Ensure we always exit 0 regardless of errors
 trap 'exit 0' EXIT
 
-# Read stdin (JSON input) -- store but don't parse
+# Read stdin (JSON input)
 _INPUT=$(cat 2>/dev/null || true)
+
+# Parse session_id for persistent state files
+_SESSION_ID=$(echo "$_INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null || true)
 
 # Source mapper.sh for mux_env
 source "${CLAUDE_PLUGIN_ROOT}/lib/mapper.sh"
@@ -61,6 +64,18 @@ fi
 # Write CLAUDE_MUXER to CLAUDE_ENV_FILE if available
 if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
   echo "export CLAUDE_MUXER=$env" >> "$CLAUDE_ENV_FILE"
+fi
+
+# Capture and persist the parent surface ref for this session.
+# This lets agent hooks know which surface belongs to CC itself so they
+# never accidentally close it, and use it as the split anchor.
+if [[ -n "$_SESSION_ID" ]] && command -v cmux >/dev/null 2>&1; then
+  _PARENT_SURFACE=$(cmux identify --json 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('caller',{}).get('surface_ref',''))" \
+    2>/dev/null || true)
+  if [[ -n "$_PARENT_SURFACE" ]]; then
+    echo "$_PARENT_SURFACE" > "/tmp/cmux-session-${_SESSION_ID}"
+  fi
 fi
 
 # Warn on stderr when no multiplexer is available
