@@ -1,0 +1,16 @@
+# Dev-only MCP config (not part of the plugin)
+.mcp.json
+.mcp.local.json
+
+# VBW planning artifacts
+.vbw-planning/
+
+# Build output
+dist/
+
+# Claude Code local dev config (hooks, rules, settings, db)
+.claude/
+.claude.bak/
+
+# Project instructions (local, not part of plugin)
+CLAUDE.md

@@ -238,6 +238,17 @@ If you see `Multiplexer: none`, check that you're running inside a tmux or cmux 
 - **Python 3 required** -- hooks use Python 3 for JSON parsing. If Python 3 is unavailable, agent names default to `"unknown"` and panel operations may be mismatched.
 - **Single-process state** -- panel create and destroy operations must run in the same shell process to share state. Hook invocations each run in their own subprocess.
 
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+
+Key points:
+- Fork and branch from `main` — never commit directly
+- Run `bash tests/run-tests.sh` before submitting (all tests must pass)
+- Follow commit format: `{type}({scope}): {description}`
+- PRs that touch `lib/`, `hooks/`, or test infrastructure require **2-4 rounds of QA review** using Claude Opus 4.6 or equivalent — see CONTRIBUTING.md for the full process
+- Docs-only PRs skip the QA round requirement
+
 ## License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.

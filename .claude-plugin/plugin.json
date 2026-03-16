@@ -6,6 +6,5 @@
     "name": "Anthropic"
   },
   "license": "MIT",
-  "keywords": ["tmux", "agents", "panel-management", "cmux"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": ["tmux", "agents", "panel-management", "cmux"]
 }
