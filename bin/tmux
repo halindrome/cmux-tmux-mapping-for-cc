@@ -103,6 +103,17 @@ fi
 _shim_debug "Intercepting: tmux $*"
 _shim_log "$@"
 
+# Strip socket-routing flags CC adds for process isolation.
+# CC calls: tmux -L claude-{PID} {subcmd} {args}
+# Without this, $1 is "-L" and all real commands fall through to real tmux.
+while true; do
+  case "${1:-}" in
+    -L|-S) shift 2 ;;   # -L socket-name  or  -S socket-path
+    -u)    shift   ;;   # -u unicode flag (safe to ignore)
+    *)     break   ;;
+  esac
+done
+
 # --- Fast-path: CC validation commands (no lib sourcing needed) --------------
 
 case "${1:-}" in
@@ -236,17 +247,6 @@ registry_remove() {
 }
 
 # --- Command dispatch --------------------------------------------------------
-
-# Strip socket-routing flags CC adds for process isolation.
-# CC calls: tmux -L claude-{PID} {subcmd} {args}
-# Without this, $1 is "-L" and all real commands fall through to real tmux.
-while true; do
-  case "${1:-}" in
-    -L|-S) shift 2 ;;   # -L socket-name  or  -S socket-path
-    -u)    shift   ;;   # -u unicode flag (safe to ignore)
-    *)     break   ;;
-  esac
-done
 
 subcmd="${1:-}"
 shift || true
