@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+# =============================================================================
+# bin/tmux -- Tmux shim for cmux-tmux-mapping
+#
+# Drop-in tmux replacement that intercepts CC's tmux calls and routes them
+# through cmux via lib/commands.sh. When the user is in real tmux ($TMUX set
+# without $CMUX_SHIM_ACTIVE), passes through to the real tmux binary.
+#
+# Environment:
+#   CMUX_SHIM_ACTIVE=1  -- Set by SessionStart hook; indicates shim mode
+#   CMUX_DEBUG=1         -- Enable debug logging to stderr
+#   TMUX_PANE            -- Current fake pane ID (%N)
+#   CMUX_REGISTRY_DIR    -- File-based pane->surface registry directory
+# =============================================================================
+
+# --- Resolve paths -----------------------------------------------------------
+
+SHIM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SHIM_DIR}/.." && pwd)"
+
+# --- Debug logging -----------------------------------------------------------
+
+_shim_debug() {
+  [[ "${CMUX_DEBUG:-0}" == "1" ]] && printf '[cmux-shim] %s\n' "$*" >&2
+  return 0
+}
+
+# --- Find real tmux binary ---------------------------------------------------
+# Parse $PATH manually, skip our own directory. Then check hardcoded fallbacks.
+
+_find_real_tmux() {
+  local IFS=':'
+  local dir
+  for dir in $PATH; do
+    if [[ "$dir" != "$SHIM_DIR" && -x "$dir/tmux" ]]; then
+      echo "$dir/tmux"
+      return 0
+    fi
+  done
+  # Hardcoded fallbacks (skip when CMUX_SHIM_NO_FALLBACK=1 for testing)
+  if [[ "${CMUX_SHIM_NO_FALLBACK:-0}" != "1" ]]; then
+    local candidate
+    for candidate in /usr/bin/tmux /usr/local/bin/tmux /opt/homebrew/bin/tmux; do
+      if [[ -x "$candidate" ]]; then
+        echo "$candidate"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+REAL_TMUX="$(_find_real_tmux 2>/dev/null || true)"
+_shim_debug "REAL_TMUX=${REAL_TMUX:-<not found>}"
+
+# --- Passthrough check -------------------------------------------------------
+# If TMUX is set but CMUX_SHIM_ACTIVE is NOT set, user is in real tmux.
+
+if [[ -n "${TMUX:-}" && -z "${CMUX_SHIM_ACTIVE:-}" ]]; then
+  if [[ -n "$REAL_TMUX" ]]; then
+    _shim_debug "Real tmux session detected, passing through to $REAL_TMUX"
+    exec "$REAL_TMUX" "$@"
+  else
+    echo "cmux-shim: real tmux session detected but tmux binary not found" >&2
+    exit 1
+  fi
+fi
+
+# --- Shim mode check ---------------------------------------------------------
+# If CMUX_SHIM_ACTIVE is not set, we're not in shim mode. Fall through to real
+# tmux if available, otherwise error.
+
+if [[ -z "${CMUX_SHIM_ACTIVE:-}" ]]; then
+  if [[ -n "$REAL_TMUX" ]]; then
+    _shim_debug "Not in shim mode, passing through to $REAL_TMUX"
+    exec "$REAL_TMUX" "$@"
+  else
+    echo "cmux-shim: no tmux binary found and shim mode not active" >&2
+    exit 1
+  fi
+fi
+
+# =============================================================================
+# SHIM MODE -- CMUX_SHIM_ACTIVE=1
+# =============================================================================
+
+_shim_debug "Intercepting: tmux $*"
+
+# --- Fast-path: CC validation commands (no lib sourcing needed) --------------
+
+case "${1:-}" in
+  -V|--version)
+    if [[ -n "$REAL_TMUX" ]]; then
+      "$REAL_TMUX" -V 2>/dev/null || echo "tmux 3.4"
+    else
+      echo "tmux 3.4"
+    fi
+    exit 0
+    ;;
+
+  info)
+    cat <<'INFOEOF'
+server started, pid 99999
+terminal features: 256,RGB,clipboard,title
+INFOEOF
+    exit 0
+    ;;
+
+  list-sessions)
+    printf 'cmux-shim: 1 windows (created %s)\n' "$(date '+%a %b %d %H:%M:%S %Y')"
+    exit 0
+    ;;
+
+  has-session)
+    # Always succeed -- we're always "in a session"
+    exit 0
+    ;;
+
+  display-message)
+    # Parse display-message args
+    shift  # remove "display-message"
+    _dm_print=false
+    _dm_target=""
+    _dm_format=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -p) _dm_print=true; shift ;;
+        -t) _dm_target="${2:-}"; shift 2 ;;
+        *)  _dm_format="$1"; shift ;;
+      esac
+    done
+
+    if [[ "$_dm_print" == true && -n "$_dm_format" ]]; then
+      _dm_result="$_dm_format"
+      _dm_result="${_dm_result//\#\{pane_id\}/${TMUX_PANE:-%0}}"
+      _dm_result="${_dm_result//\#\{session_name\}/cmux-shim}"
+      _dm_result="${_dm_result//\#\{window_index\}/0}"
+      _dm_result="${_dm_result//\#\{pane_index\}/0}"
+      echo "$_dm_result"
+    fi
+    exit 0
+    ;;
+esac
+
+# --- Source library files for command translation ----------------------------
+
+_LIB_DIR="${PROJECT_ROOT}/lib"
+
+if [[ ! -d "$_LIB_DIR" ]]; then
+  _shim_debug "lib/ directory not found at $_LIB_DIR"
+  if [[ -n "$REAL_TMUX" ]]; then
+    exec "$REAL_TMUX" "$@"
+  fi
+  echo "cmux-shim: lib/ not found and no real tmux available" >&2
+  exit 1
+fi
+
+# Source with error checking
+if [[ -f "${_LIB_DIR}/commands.sh" ]]; then
+  source "${_LIB_DIR}/commands.sh"
+else
+  _shim_debug "commands.sh not found"
+  if [[ -n "$REAL_TMUX" ]]; then exec "$REAL_TMUX" "$@"; fi
+  exit 1
+fi
+
+if [[ -f "${_LIB_DIR}/id-map.sh" ]]; then
+  source "${_LIB_DIR}/id-map.sh"
+fi
+
+# Disable errexit for shim dispatch -- we handle errors explicitly
+set +e
+
+# --- Pane ID counter (file-based for cross-process consistency) --------------
+
+_PANE_COUNTER_FILE="${CMUX_REGISTRY_DIR:-/tmp/cmux-shim-$(id -u)}/.pane-counter"
+
+next_pane_id() {
+  local counter=0
+  local counter_dir
+  counter_dir="$(dirname "$_PANE_COUNTER_FILE")"
+  mkdir -p "$counter_dir"
+  if [[ -f "$_PANE_COUNTER_FILE" ]]; then
+    counter=$(<"$_PANE_COUNTER_FILE")
+  fi
+  counter=$((counter + 1))
+  echo "$counter" > "$_PANE_COUNTER_FILE"
+  echo "%${counter}"
+}
+
+# --- Registry helpers (file-based) -------------------------------------------
+
+registry_register() {
+  local pane_id="$1"
+  local surface_id="$2"
+  if [[ -n "${CMUX_REGISTRY_DIR:-}" ]]; then
+    mkdir -p "$CMUX_REGISTRY_DIR"
+    echo "$surface_id" > "${CMUX_REGISTRY_DIR}/${pane_id}"
+    _shim_debug "Registered ${pane_id} -> ${surface_id}"
+  fi
+  return 0
+}
+
+registry_lookup_surface() {
+  local pane_id="$1"
+  if [[ -n "${CMUX_REGISTRY_DIR:-}" && -f "${CMUX_REGISTRY_DIR}/${pane_id}" ]]; then
+    cat "${CMUX_REGISTRY_DIR}/${pane_id}"
+    return 0
+  fi
+  return 1
+}
+
+registry_remove() {
+  local pane_id="$1"
+  if [[ -n "${CMUX_REGISTRY_DIR:-}" && -f "${CMUX_REGISTRY_DIR}/${pane_id}" ]]; then
+    rm -f "${CMUX_REGISTRY_DIR}/${pane_id}"
+    _shim_debug "Removed registry entry for ${pane_id}"
+  fi
+}
+
+# --- Command dispatch --------------------------------------------------------
+
+subcmd="${1:-}"
+shift || true
+
+case "$subcmd" in
+  split-window)
+    # Get the cmux command string
+    cmux_cmd=$(map_split_window "$@")
+    _shim_debug "Translated: $cmux_cmd"
+
+    # Execute and capture surface ID
+    new_surface=$(eval "$cmux_cmd" 2>/dev/null) || true
+    if [[ -z "$new_surface" ]]; then
+      new_surface="surface-$(date +%s)-$$"
+      _shim_debug "No surface returned from cmux, using generated: $new_surface"
+    fi
+
+    # Allocate pane ID and register mapping
+    pane_id=$(next_pane_id)
+    registry_register "$pane_id" "$new_surface"
+
+    # Output pane ID (CC may capture this)
+    echo "$pane_id"
+    exit 0
+    ;;
+
+  send-keys)
+    # Parse -t target from args, then delegate to map_send_keys
+    cmux_cmd=$(map_send_keys "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    eval "$cmux_cmd" 2>/dev/null || true
+    exit 0
+    ;;
+
+  kill-pane)
+    # Parse -t target to find surface, then close
+    _kp_target=""
+    _kp_args=("$@")
+    for ((_kp_i=0; _kp_i<${#_kp_args[@]}; _kp_i++)); do
+      if [[ "${_kp_args[$_kp_i]}" == "-t" && $((_kp_i+1)) -lt ${#_kp_args[@]} ]]; then
+        _kp_target="${_kp_args[$((_kp_i+1))]}"
+        break
+      fi
+    done
+
+    cmux_cmd=$(map_kill_pane "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    eval "$cmux_cmd" 2>/dev/null || true
+
+    # Clean up registry
+    if [[ -n "$_kp_target" ]]; then
+      registry_remove "$_kp_target"
+    fi
+    exit 0
+    ;;
+
+  select-pane)
+    cmux_cmd=$(map_select_pane "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    eval "$cmux_cmd" 2>/dev/null || true
+    exit 0
+    ;;
+
+  list-panes)
+    # Try cmux list-surfaces, transform to tmux-like format
+    if command -v cmux &>/dev/null; then
+      cmux list-surfaces 2>/dev/null || true
+    else
+      echo "0: [80x24] [active]"
+    fi
+    exit 0
+    ;;
+
+  new-session)
+    cmux_cmd=$(map_new_session "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    eval "$cmux_cmd" 2>/dev/null || true
+    exit 0
+    ;;
+
+  kill-session)
+    cmux_cmd=$(map_kill_session "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    eval "$cmux_cmd" 2>/dev/null || true
+    exit 0
+    ;;
+
+  *)
+    # Unrecognized command -- fall through to real tmux or error
+    if [[ -n "$REAL_TMUX" ]]; then
+      _shim_debug "Unrecognized command '$subcmd', passing to real tmux"
+      exec "$REAL_TMUX" "$subcmd" "$@"
+    else
+      echo "cmux-shim: unrecognized command '$subcmd' and no real tmux available" >&2
+      exit 1
+    fi
+    ;;
+esac
