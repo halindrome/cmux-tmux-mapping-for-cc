@@ -53,6 +53,8 @@ if [[ -z "${TMUX:-}" ]] && command -v cmux >/dev/null 2>&1; then
       echo "export TMUX_PANE=\"${_FAKE_TMUX_PANE}\""
       echo "export CMUX_SHIM_ACTIVE=1"
       echo "export CMUX_REGISTRY_DIR=\"${_REGISTRY_DIR}\""
+      echo "export CMUX_SHIM_LOG=1"
+      echo "export CMUX_SHIM_LOG_FILE=\"/tmp/cmux-shim-${_FAKE_UID}.log\""
       echo "export PATH=\"${_PLUGIN_BIN_DIR}:\$PATH\""
     } >> "$CLAUDE_ENV_FILE"
     _SHIM_ACTIVE=1
