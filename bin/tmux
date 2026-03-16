@@ -25,6 +25,22 @@ _shim_debug() {
   return 0
 }
 
+# --- Shim call logging -------------------------------------------------------
+# CMUX_SHIM_LOG=1   -- enable logging
+# CMUX_SHIM_LOG_FILE -- override log path (default /tmp/cmux-shim-{uid}.log)
+
+_shim_log() {
+  [[ "${CMUX_SHIM_LOG:-0}" != "1" ]] && return 0
+  local logfile="${CMUX_SHIM_LOG_FILE:-/tmp/cmux-shim-$(id -u).log}"
+  printf '[%s] >>> tmux %s\n' "$(date +%T.%3N)" "$*" >> "$logfile"
+}
+
+_shim_log_result() {
+  [[ "${CMUX_SHIM_LOG:-0}" != "1" ]] && return 0
+  local logfile="${CMUX_SHIM_LOG_FILE:-/tmp/cmux-shim-$(id -u).log}"
+  printf '[%s] <<< %s  (exit %s)\n' "$(date +%T.%3N)" "${1:-}" "${2:-0}" >> "$logfile"
+}
+
 # --- Find real tmux binary ---------------------------------------------------
 # Parse $PATH manually, skip our own directory. Then check hardcoded fallbacks.
 
@@ -85,6 +101,7 @@ fi
 # =============================================================================
 
 _shim_debug "Intercepting: tmux $*"
+_shim_log "$@"
 
 # --- Fast-path: CC validation commands (no lib sourcing needed) --------------
 
