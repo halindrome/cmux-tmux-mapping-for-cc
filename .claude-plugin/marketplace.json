@@ -1,0 +1,30 @@
+{
+  "name": "cmux-tmux-mapping-marketplace",
+  "owner": {
+    "name": "Shane McCarron",
+    "email": "halindrome@gmail.com"
+  },
+  "metadata": {
+    "description": "cmux-tmux-mapping — Claude Code plugin for transparent tmux/cmux panel management"
+  },
+  "plugins": [
+    {
+      "name": "cmux-tmux-mapping",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/halindrome/cmux-tmux-mapping-for-cc.git"
+      },
+      "description": "Maps tmux operations into cmux commands for transparent agent panel management",
+      "version": "1.0.0",
+      "license": "MIT",
+      "keywords": [
+        "tmux",
+        "cmux",
+        "agents",
+        "panel-management",
+        "multiplexer"
+      ],
+      "category": "development"
+    }
+  ]
+}

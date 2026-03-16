@@ -14,16 +14,41 @@ cmux-tmux-mapping detects whether your session is running inside tmux or cmux, t
 
 ## Installation
 
-Install from a local directory:
+### Via Marketplace (recommended)
 
-```bash
-claude plugin install --path ./cmux-tmux-mapping-for-cc
+**Step 1** — Register the marketplace (one-time). Add this to your `~/.config/claude-code/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "cmux-tmux-mapping-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "halindrome/cmux-tmux-mapping-for-cc"
+      }
+    }
+  }
+}
 ```
 
-Once available on the Claude Code plugin marketplace, install with:
+**Step 2** — Install the plugin from within Claude Code:
+
+```
+/plugins install cmux-tmux-mapping
+```
+
+### From Local Directory
 
 ```bash
-/plugin install cmux-tmux-mapping
+claude --plugin-dir /path/to/cmux-tmux-mapping-for-cc/dist
+```
+
+To build the dist directory from source:
+
+```bash
+git clone https://github.com/halindrome/cmux-tmux-mapping-for-cc.git
+cd cmux-tmux-mapping-for-cc
+bash scripts/build-dist.sh
 ```
 
 ## Quick Start

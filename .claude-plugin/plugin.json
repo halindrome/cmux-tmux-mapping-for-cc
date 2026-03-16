@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Automatically enables Claude Code tmux support for agents and maps tmux operations into cmux commands for panel management",
   "author": {
-    "name": "Anthropic"
+    "name": "Shane McCarron",
+    "url": "https://github.com/halindrome"
   },
   "license": "MIT",
   "keywords": ["tmux", "agents", "panel-management", "cmux"]
