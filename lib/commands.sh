@@ -133,8 +133,13 @@ map_split_window() {
     esac
   done
 
-  local cmd="cmux new-split"
-  [[ -n "$direction" ]] && cmd+=" $direction"
+  # Map tmux -v/-h flags to cmux positional direction (down/right)
+  local cmux_dir="down"
+  if [[ "$direction" == "-h" ]]; then
+    cmux_dir="right"
+  fi
+
+  local cmd="cmux new-split $cmux_dir"
   if [[ -n "$percentage" ]]; then
     _cmux_warn "split-window: -p (percentage) may not be supported by cmux, passing as hint"
     cmd+=" -p $percentage"
@@ -395,9 +400,46 @@ map_command() {
     list-panes)     map_list_panes "${rest[@]+"${rest[@]}"}" ;;
     new-session)    map_new_session "${rest[@]+"${rest[@]}"}" ;;
     kill-session)   map_kill_session "${rest[@]+"${rest[@]}"}" ;;
+    new-window)     map_new_window    "${rest[@]+\"${rest[@]}\"}" ;;
+    list-windows)   map_list_windows  "${rest[@]+\"${rest[@]}\"}" ;;
+    select-layout)  map_select_layout "${rest[@]+\"${rest[@]}\"}" ;;
+    resize-pane)    map_resize_pane   "${rest[@]+\"${rest[@]}\"}" ;;
     *)
       echo "map_command: unrecognized tmux command '$subcmd'" >&2
       return 1
       ;;
   esac
+}
+
+# map_new_window(...args)
+map_new_window() {
+  local name=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n) name="${2:-}"; shift 2 ;;
+      -t|-F) shift 2 ;;
+      -P) shift ;;
+      *) shift ;;
+    esac
+  done
+  local cmd="cmux new-split down"
+  [[ -n "$name" ]] && cmd+=" --name $name"
+  echo "$cmd"
+  return 0
+}
+
+# map_list_windows(...args)
+map_list_windows() {
+  echo "claude"
+  return 0
+}
+
+# map_select_layout(...args)
+map_select_layout() {
+  return 0
+}
+
+# map_resize_pane(...args)
+map_resize_pane() {
+  return 0
 }

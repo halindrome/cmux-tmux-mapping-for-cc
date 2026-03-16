@@ -334,6 +334,38 @@ case "$subcmd" in
     exit 0
     ;;
 
+  new-window)
+    cmux_cmd=$(map_new_window "$@")
+    _shim_debug "Translated: $cmux_cmd"
+    new_surface=$(eval "$cmux_cmd" 2>/dev/null) || true
+    if [[ -z "$new_surface" ]]; then
+      new_surface="surface-$(date +%s)-$$"
+    fi
+    pane_id=$(next_pane_id)
+    registry_register "$pane_id" "$new_surface"
+    echo "$pane_id"
+    _shim_log_result "$pane_id" 0
+    exit 0
+    ;;
+
+  list-windows)
+    map_list_windows "$@"
+    _shim_log_result "list-windows:ok" 0
+    exit 0
+    ;;
+
+  select-layout)
+    _shim_debug "select-layout: no-op in cmux shim"
+    _shim_log_result "select-layout:noop" 0
+    exit 0
+    ;;
+
+  resize-pane)
+    _shim_debug "resize-pane: no-op in cmux shim"
+    _shim_log_result "resize-pane:noop" 0
+    exit 0
+    ;;
+
   *)
     # Unrecognized command -- fall through to real tmux or error
     if [[ -n "$REAL_TMUX" ]]; then
