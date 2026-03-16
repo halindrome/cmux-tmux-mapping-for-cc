@@ -63,17 +63,34 @@ _cmux_warn() {
 
 # _resolve_target(tmux_target)
 #   Resolve a tmux target to a cmux surface ID via id-map.
-#   Falls back to the raw target if no mapping exists.
+#   Resolution chain: in-memory map -> file-based registry -> raw passthrough.
+#   Handles %N format targets for registry lookup.
 _resolve_target() {
   local target="${1:-}"
   if [[ -z "$target" ]]; then
     return 0
   fi
+
+  # 1. Try in-memory lookup (tmux_target_to_cmux includes file fallback)
   if declare -f tmux_target_to_cmux &>/dev/null; then
-    tmux_target_to_cmux "$target" 2>/dev/null || echo "$target"
-  else
-    echo "$target"
+    local surface
+    if surface="$(tmux_target_to_cmux "$target" 2>/dev/null)"; then
+      echo "$surface"
+      return 0
+    fi
   fi
+
+  # 2. Try file-based registry directly (for shim use where in-memory may be empty)
+  if declare -f registry_lookup_surface &>/dev/null && [[ -n "${CMUX_REGISTRY_DIR:-}" ]]; then
+    local surface
+    if surface="$(registry_lookup_surface "$target" 2>/dev/null)" && [[ -n "$surface" ]]; then
+      echo "$surface"
+      return 0
+    fi
+  fi
+
+  # 3. Fall back to raw target string
+  echo "$target"
 }
 
 # --- Public mapping functions ---
